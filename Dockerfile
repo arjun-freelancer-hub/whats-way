@@ -33,7 +33,6 @@ RUN npm install --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/shared ./shared
-COPY --from=builder /app/public ./public
 COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
 
 # Create uploads directory
