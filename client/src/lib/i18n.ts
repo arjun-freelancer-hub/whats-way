@@ -82,6 +82,13 @@ export const useI18n = create<I18nState>()(
           if (!response.ok) throw new Error("Failed to fetch languages");
           const data = await response.json();
 
+          // If the DB has no languages configured yet, fall back to the built-in static list
+          if (!data || data.length === 0) {
+            console.warn("[i18n] No languages in DB, using static fallback");
+            set({ languages: { ...staticLanguages }, isLoadingLanguages: false });
+            return;
+          }
+
           const dynamicLanguages: Record<string, LanguageConfig> = {};
           for (const lang of data) {
             dynamicLanguages[lang.code] = {
