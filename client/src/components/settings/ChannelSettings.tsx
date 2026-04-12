@@ -113,6 +113,7 @@ export function ChannelSettings() {
   const [showSuccessGuidance, setShowSuccessGuidance] = useState(false);
   const [lastConnectedCoexistence, setLastConnectedCoexistence] = useState(false);
   const [channelProcessing, setChannelProcessing] = useState<{ status: "processing" | "error"; errorMessage?: string } | null>(null);
+  const [fbReady, setFbReady] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
   const { selectedChannel, setSelectedChannel } = useChannelContext();
@@ -359,6 +360,8 @@ export function ChannelSettings() {
   useEffect(() => {
     if (!config?.appId) return;
 
+    setFbReady(false);
+
     const existingScript = document.getElementById("facebook-jssdk");
     if (existingScript) {
       existingScript.remove();
@@ -373,6 +376,7 @@ export function ChannelSettings() {
         version: "v24.0",
       });
       console.log("FB SDK Initialized with App ID:", config.appId);
+      setFbReady(true);
     };
 
     const script = document.createElement("script");
@@ -408,14 +412,38 @@ export function ChannelSettings() {
   };
 
   const launchFBLogin = (coexistence: boolean) => {
-    if (!window.FB) {
+    if (!config?.appId) {
       toast({
-        title: "Facebook SDK not ready",
-        description: "Please refresh the page and try again",
+        title: "Meta App ID not configured",
+        description: "Please go to Settings -> Meta Config and save your App ID first.",
         variant: "destructive",
       });
       return;
     }
+
+    if (!window.FB) {
+      // SDK is still loading — wait up to 8 seconds before giving up
+      let elapsed = 0;
+      const interval = setInterval(() => {
+        elapsed += 500;
+        if (window.FB) {
+          clearInterval(interval);
+          doFBLogin(coexistence);
+        } else if (elapsed >= 8000) {
+          clearInterval(interval);
+          toast({
+            title: "Facebook SDK not ready",
+            description: "The Facebook SDK failed to load. Check your internet connection or ad-blocker and try again.",
+            variant: "destructive",
+          });
+        }
+      }, 500);
+      return;
+    }
+    doFBLogin(coexistence);
+  };
+
+  const doFBLogin = (coexistence: boolean) => {
 
     if (!config?.configId) {
       toast({

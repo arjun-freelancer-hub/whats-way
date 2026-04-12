@@ -42,6 +42,8 @@ async function getTransporter() {
     const port = parseInt(config.port, 10);
     const secure = port === 465;
 
+    console.info(`[Email] Initializing SMTP: ${config.host}:${port} (secure: ${secure})`);
+
     transporter = nodemailer.createTransport({
       host: config.host,
       port,
@@ -51,9 +53,12 @@ async function getTransporter() {
         user: config.user,
         pass: config.password,
       },
+      // Added timeout and debugging settings
+      connectionTimeout: 10000, 
+      greetingTimeout: 10000,
     });
   } else {
-    console.warn("Using fallback SMTP settings (emails will not be sent)");
+    console.warn("[Email] Using fallback SMTP settings (emails will not be sent)");
     transporter = nodemailer.createTransport({
       jsonTransport: true,
     });
@@ -264,7 +269,7 @@ export async function sendOTPEmail(
 
   const companyName = configs?.name || "Your Company";
   const fromName = config?.fromName || companyName;
-  const fromEmail = config?.fromEmail;
+  const fromEmail = config?.fromEmail || config?.user || process.env.SMTP_USER;
 
   const mailOptions = {
     from: `"${fromName}" <${fromEmail}>`,
@@ -303,7 +308,7 @@ export async function sendContactEmail(data: {
 
   const companyName = configs?.name || "Your Company";
   const fromName = config?.fromName || companyName;
-  const fromEmail = config?.fromEmail;
+  const fromEmail = config?.fromEmail || config?.user || process.env.SMTP_USER;
 
   const html = `
   <div style="background:#f4f5f7; padding:40px; font-family:Arial, sans-serif;">
@@ -374,7 +379,7 @@ export async function sendOTPEmailVerify(
 
   const companyName = configs?.name || "Your Company";
   const fromName = config?.fromName || companyName;
-  const fromEmail = config?.fromEmail;
+  const fromEmail = config?.fromEmail || config?.user || process.env.SMTP_USER;
 
   const mailOptions = {
     from: `"${fromName}" <${fromEmail}>`,
