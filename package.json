@@ -144,7 +144,8 @@
     "ws": "^8.18.3",
     "zod": "^3.24.2",
     "zod-validation-error": "^3.4.0",
-    "zustand": "^5.0.7"
+    "zustand": "^5.0.7",
+    "cross-env": "^10.0.0"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.15",
@@ -166,7 +167,6 @@
     "@types/ws": "^8.5.13",
     "@vitejs/plugin-react": "^4.3.2",
     "autoprefixer": "^10.4.20",
-    "cross-env": "^10.0.0",
     "postcss": "^8.4.47",
     "prisma": "^6.16.1",
     "tailwindcss": "^3.4.17",
