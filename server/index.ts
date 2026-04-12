@@ -604,8 +604,8 @@ app.use((req, res, next) => {
     host: "0.0.0.0",
   };
 
-  // Only use reusePort if the platform supports it
-  if (process.platform !== "win32" && process.env.NODE_ENV !== "production") {
+  // reusePort is only supported on Linux (not macOS or Windows)
+  if (process.platform === "linux") {
     listenOptions.reusePort = true;
   }
 

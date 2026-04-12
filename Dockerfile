@@ -48,5 +48,5 @@ EXPOSE 5000
 # Start command: 
 # 1. Sync database schema (db:push)
 # 2. Start the production server
-# 1. Sync schema  2. Seed default data (idempotent)  3. Start server
-CMD ["sh", "-c", "npm run db:push && npm run seed && npm run start"]
+# 1. Sync schema 2. Start server
+CMD ["sh", "-c", "npm run db:push && npm run start"]
