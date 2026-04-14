@@ -116,34 +116,38 @@ export const getSMTPConfigHandler = async (req: Request, res: Response) => {
 
 export const getSMTPConfig = async () => {
   return cacheGet(CACHE_KEYS.smtpConfig(), CACHE_TTL.smtpConfig, async () => {
+    // 1. Prioritize Environment Variables (Higher precedence for cloud deployments like Railway)
+    const envHost = process.env.SMTP_HOST;
+    if (envHost) {
+      console.log('ℹ️ Using SMTP configuration from environment variables (Override)');
+      const port = process.env.SMTP_PORT || '587';
+      const isSecure = process.env.SMTP_SECURE === 'true' || port === '465';
+
+      return {
+        id: 'env-override',
+        host: envHost,
+        port: port,
+        secure: isSecure,
+        user: process.env.SMTP_USER || '',
+        password: process.env.SMTP_PASS || '',
+        fromName: process.env.SMTP_FROM_NAME || 'Your Company',
+        fromEmail: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || '',
+        logo: process.env.SMTP_LOGO || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+    }
+
+    // 2. Fallback to Database configuration
     const configs = await db.select().from(smtpConfig).limit(1);
     
-    // If no config in DB, check for environment variables
-    if (!configs || configs.length === 0) {
-      const envHost = process.env.SMTP_HOST;
-      if (envHost) {
-        console.log('ℹ️ Using SMTP configuration from environment variables');
-        const port = process.env.SMTP_PORT || '587';
-        const isSecure = process.env.SMTP_SECURE === 'true' || port === '465';
-        
-        return {
-          id: 'env-fallback',
-          host: envHost,
-          port: port,
-          secure: isSecure,
-          user: process.env.SMTP_USER || '',
-          password: process.env.SMTP_PASS || '',
-          fromName: process.env.SMTP_FROM_NAME || 'Your Company',
-          fromEmail: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || '',
-          logo: process.env.SMTP_LOGO || null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-      }
-      console.warn('⚠️ No SMTP configuration found in DB or environment');
-      return null;
+    if (configs && configs.length > 0) {
+      console.log('ℹ️ Using SMTP configuration from database');
+      return configs[0];
     }
-    return configs[0];
+
+    console.warn('⚠️ No SMTP configuration found in DB or environment');
+    return null;
   });
 };
 

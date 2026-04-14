@@ -47,8 +47,13 @@ async function getTransporter() {
     const user = config.user || '';
     const pass = config.password || '';
 
-    console.info(`[Email] Initializing SMTP: ${config.host}:${port} (secure: ${secure})`);
+    const configSource = config.id === 'env-override' ? 'Environment (Variable)' : 'Database';
+    console.info(`[Email] Initializing SMTP: ${config.host}:${port} (secure: ${secure}) [Source: ${configSource}]`);
     console.info(`[Email] Authentication: User=${user.slice(0, 3)}***@***, Pass=*** (Length: ${pass.length})`);
+    
+    if (pass.length === 0) {
+      console.warn(`[Email] ⚠️ WARNING: SMTP password length is 0. This will likely cause authentication or timeout errors.`);
+    }
 
     const transportOptions: SMTPTransport.Options & { family?: number } = {
       host: config.host,
@@ -63,8 +68,13 @@ async function getTransporter() {
       greetingTimeout: 30000,
       socketTimeout: 30000,
       dnsTimeout: 10000,
-      // Force IPv4 to avoid common IPv6 resolution/connection issues in many environments
+      // Force IPv4 aggressively at both socket and DNS level
       family: 4,
+      // Custom lookup to ensure only IPv4 is used even if DNS returns IPv6
+      lookup: (hostname, options, callback) => {
+        const dns = require('dns');
+        dns.lookup(hostname, { family: 4 }, callback);
+      },
       tls: {
         rejectUnauthorized: false,
         // Ensure STARTTLS is used for port 587
