@@ -12,7 +12,7 @@
  * have a stale database.  This file self-heals those databases.
  */
 
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 
 interface MigrationStep {
   description: string;
@@ -215,6 +215,16 @@ const steps: MigrationStep[] = [
   ),
 
   // ────────────────────────────────────────────────────
+  // smtp_config
+  // ────────────────────────────────────────────────────
+  addColumnIfNotExists(
+    "smtp_config",
+    "provider",
+    "VARCHAR(20) DEFAULT 'smtp'"
+  ),
+  addColumnIfNotExists("smtp_config", "resend_api_key", "TEXT"),
+
+  // ────────────────────────────────────────────────────
   // New tables — CREATE TABLE IF NOT EXISTS guards
   // ────────────────────────────────────────────────────
   {
@@ -332,7 +342,7 @@ const steps: MigrationStep[] = [
  * report what was actually added vs already present.
  */
 async function getExistingColumns(
-  client: Awaited<ReturnType<Pool["connect"]>>
+  client: PoolClient
 ): Promise<Set<string>> {
   const { rows } = await client.query<{ key: string }>(`
     SELECT table_name || '.' || column_name AS key
@@ -343,7 +353,7 @@ async function getExistingColumns(
 }
 
 async function getExistingTables(
-  client: Awaited<ReturnType<Pool["connect"]>>
+  client: PoolClient
 ): Promise<Set<string>> {
   const { rows } = await client.query<{ table_name: string }>(`
     SELECT table_name FROM information_schema.tables
