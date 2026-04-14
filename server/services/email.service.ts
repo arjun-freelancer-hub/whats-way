@@ -41,7 +41,9 @@ async function getTransporter() {
 
   if (config) {
     const port = Number(config.port);
-    const secure = config.secure === true || port === 465;
+    // Explicitly force secure: false for 587 (STARTTLS) and true for 465 (SSL/TLS)
+    // This prevents connection hangs due to misconfiguration.
+    const secure = port === 465;
 
     console.info(`[Email] Initializing SMTP: ${config.host}:${port} (secure: ${secure})`);
 
