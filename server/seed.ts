@@ -395,6 +395,22 @@ async function seed() {
 </div>`,
         variables: ["messageCount", "contactCount", "contactSummary", "channelName", "userName", "appUrl"],
       },
+      {
+        eventType: "otp_verification",
+        label: "Email Verification OTP",
+        description: "Sent when a user needs to verify their email address",
+        subject: "Verify your email address",
+        htmlBody: "Please use the following code to verify your email address and activate your account.",
+        variables: ["userName", "otpCode", "companyName"],
+      },
+      {
+        eventType: "password_reset",
+        label: "Password Reset OTP",
+        description: "Sent when a user requests to reset their password",
+        subject: "Reset your password",
+        htmlBody: "You requested to reset your password. Use the code below to complete the process.",
+        variables: ["userName", "otpCode", "companyName"],
+      },
     ];
 
     for (const tmpl of notifTemplates) {

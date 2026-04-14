@@ -122,10 +122,18 @@ export const getSMTPConfigHandler = async (req: Request, res: Response) => {
 
 export const getSMTPConfig = async () => {
   return cacheGet(CACHE_KEYS.smtpConfig(), CACHE_TTL.smtpConfig, async () => {
-    // 1. Prioritize Environment Variables (Higher precedence for cloud deployments like Railway)
+    // 1. Prioritize Database configuration (Source of truth for the UI)
+    const configs = await db.select().from(smtpConfig).limit(1);
+    
+    if (configs && configs.length > 0) {
+      console.log('ℹ️ Using SMTP configuration from database');
+      return configs[0];
+    }
+
+    // 2. Fallback to Environment Variables (Higher precedence for cloud environments if DB is not set)
     const envHost = process.env.SMTP_HOST;
     if (envHost) {
-      console.log('ℹ️ Using SMTP configuration from environment variables (Override)');
+      console.log('ℹ️ Using SMTP configuration from environment variables (Fallback)');
       const port = process.env.SMTP_PORT || '587';
       const isSecure = process.env.SMTP_SECURE === 'true' || port === '465';
 
@@ -144,14 +152,6 @@ export const getSMTPConfig = async () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-    }
-
-    // 2. Fallback to Database configuration
-    const configs = await db.select().from(smtpConfig).limit(1);
-    
-    if (configs && configs.length > 0) {
-      console.log('ℹ️ Using SMTP configuration from database');
-      return configs[0];
     }
 
     console.warn('⚠️ No SMTP configuration found in DB or environment');
