@@ -17,6 +17,7 @@
 
 import nodemailer from "nodemailer";
 import SMTPTransport from "nodemailer/lib/smtp-transport";
+import dns from "dns";
 import { getSMTPConfig } from "server/controllers/smtp.controller";
 import { getPanelConfigs } from "./panel.config";
 import { cacheInvalidate, CACHE_KEYS } from './cache';
@@ -55,7 +56,7 @@ async function getTransporter() {
       console.warn(`[Email] ⚠️ WARNING: SMTP password length is 0. This will likely cause authentication or timeout errors.`);
     }
 
-    const transportOptions: SMTPTransport.Options & { family?: number } = {
+    const transportOptions: SMTPTransport.Options & { family?: number, lookup?: any } = {
       host: config.host,
       port,
       secure,
@@ -71,8 +72,7 @@ async function getTransporter() {
       // Force IPv4 aggressively at both socket and DNS level
       family: 4,
       // Custom lookup to ensure only IPv4 is used even if DNS returns IPv6
-      lookup: (hostname, options, callback) => {
-        const dns = require('dns');
+      lookup: (hostname: string, options: any, callback: any) => {
         dns.lookup(hostname, { family: 4 }, callback);
       },
       tls: {
