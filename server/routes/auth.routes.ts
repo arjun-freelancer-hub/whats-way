@@ -19,13 +19,13 @@ import { Request, Response, Router } from "express";
 import { diployLogger, HTTP_STATUS, DIPLOY_BRAND } from "@diploy/core";
 import { db } from "../db";
 import { users, userActivityLogs } from "@shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { validateRequest } from "../middlewares/validateRequest.middleware";
 import { resolveUserPermissions } from "server/utils/role-permissions";
 import country from "../config/country.json"
-import {sendOTPEmail} from "../services/email.service"
+import { sendOTPEmail } from "../services/email.service"
 import { otpVerifications } from "@shared/schema";
 
 
@@ -33,9 +33,8 @@ const router = Router();
 
 // Validation schemas
 const loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
+  username: z.string().min(1, "Username or email is required"),
   password: z.string().min(1, "Password is required"),
-
 });
 
 // Login endpoint
@@ -43,20 +42,28 @@ router.post("/login", validateRequest(loginSchema), async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    // console.log("Login request body:", req.body);
+    const isDebug = process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development';
 
-    // Find user by username
+    if (isDebug) {
+      console.log("Login attempt for identifier:", username);
+    }
+
+    // Find user by username or email
     const results = await db
       .select()
       .from(users)
-      .where(eq(users.username, username));
+      .where(or(eq(users.username, username?.trim()), eq(users.email, username?.trim())));
 
-      console.log(results)
+    if (isDebug) {
+      console.log("Login results found:", results.length);
+    }
 
     const user = results[0];
 
     if (!user) {
-      console.warn("User not found:", username);
+      if (isDebug) {
+        console.warn("User not found for identifier:", username);
+      }
       return res.status(401).json({ error: "Invalid username or password" });
     }
 
@@ -64,13 +71,13 @@ router.post("/login", validateRequest(loginSchema), async (req, res) => {
 
     // Check if user is active
     if ((user.status || "").trim().toLowerCase() !== "active") {
-  return res.status(403).json({ error: "Account is inactive. Please contact administrator." });
-}
+      return res.status(403).json({ error: "Account is inactive. Please contact administrator." });
+    }
 
     // Check if email is verified
-if (user.isEmailVerified === false) {
-  return res.status(403).json({ error: "Email not verified. Please verify your email first." });
-}
+    if (user.isEmailVerified === false) {
+      return res.status(403).json({ error: "Email not verified. Please verify your email first." });
+    }
 
     // Ensure password field exists
     if (!user.password) {
@@ -79,8 +86,14 @@ if (user.isEmailVerified === false) {
     }
 
     // Verify password
+    if (isDebug) {
+      console.log("Verifying password. Provided length:", password?.length);
+    }
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
+      if (isDebug) {
+        console.warn("Password mismatch for user:", user.username);
+      }
       return res.status(401).json({ error: "Invalid username or password" });
     }
 
@@ -175,7 +188,7 @@ router.post("/logout", (req, res) => {
 router.get("/me", async (req, res) => {
   // console.log("Fetching current user" , req.session);
   const user = (req as any).session?.user;
-// console.log("Session user:", user);
+  // console.log("Session user:", user);
   if (!user) {
     return res.status(401).json({ error: "Not authenticated" });
   }
@@ -263,7 +276,7 @@ router.post("/forgot-password", async (req: Request, res: Response) => {
 
     // Send OTP via email
     try {
-      await sendOTPEmail(email, otpCode, userName);
+      await sendOTPEmail(email, otpCode, userName ?? "");
       console.log(`✉️ OTP sent to ${email}`);
     } catch (emailError) {
       console.error("⚠️ Failed to send OTP email:", emailError);
@@ -308,8 +321,10 @@ router.post("/reset-password", async (req, res) => {
       .select()
       .from(otpVerifications)
       .where(
-        eq(otpVerifications.userId, userId),
-        eq(otpVerifications.isUsed, false)
+        and(
+          eq(otpVerifications.userId, userId),
+          eq(otpVerifications.isUsed, false)
+        )
       )
       .limit(1);
 

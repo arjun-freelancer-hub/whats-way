@@ -57,9 +57,8 @@ import { useToast } from "@/hooks/use-toast";
 import { AppSettings } from "@/types/types";
 
 const loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
+  username: z.string().min(1, "Username or email is required"),
   password: z.string().min(1, "Password is required"),
-
 });
 
 export default function LoginPage() {
@@ -261,13 +260,13 @@ export default function LoginPage() {
                       name="username"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Username</FormLabel>
+                          <FormLabel>Username or Email</FormLabel>
                           <FormControl>
                             <div className="relative">
                               <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                               <Input
                                 {...field}
-                                placeholder="Enter your username"
+                                placeholder="Enter your username or email"
                                 autoComplete="username"
                                 autoFocus
                                 className="pl-10"
