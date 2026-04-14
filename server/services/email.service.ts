@@ -47,8 +47,12 @@ async function getTransporter() {
 
     console.info(`[Email] Initializing SMTP: ${config.host}:${port} (secure: ${secure})`);
 
-    const transportOptions: SMTPTransport.Options = {
-      host: config.host || '',
+    const host = (config.host || '').toLowerCase() === 'smtp.gmail.com' 
+      ? 'smtp.googlemail.com' 
+      : (config.host || '');
+
+    const transportOptions: SMTPTransport.Options & { family?: number } = {
+      host,
       port,
       secure,
       auth: {
@@ -60,11 +64,15 @@ async function getTransporter() {
       greetingTimeout: 30000,
       socketTimeout: 30000,
       dnsTimeout: 10000,
+      // Force IPv4 to avoid common IPv6 resolution/connection issues in many environments
+      family: 4,
       tls: {
         rejectUnauthorized: false,
         // Ensure STARTTLS is used for port 587
         ...(port === 587 ? { minVersion: 'TLSv1.2' } : {})
       },
+      // Require TLS for port 587
+      ...(port === 587 ? { requireTLS: true } : {}),
       // Enable logging based on debug mode
       debug: process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development',
       logger: process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development',
@@ -301,9 +309,15 @@ export async function sendOTPEmail(
   try {
     const info = await mailer.sendMail(mailOptions);
     return { success: true, messageId: info.messageId };
-  } catch (error) {
-    console.error("[Email] Failed to send OTP:", error);
-    throw new Error("Failed to send verification email");
+  } catch (error: any) {
+    console.error("[Email] Failed to send OTP:", {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      stack: error.stack
+    });
+    throw new Error(`Failed to send verification email: ${error.code || error.message}`);
   }
 }
 
@@ -376,9 +390,15 @@ export async function sendContactEmail(data: {
   try {
     const info = await mailer.sendMail(mailOptions);
     return { success: true, messageId: info.messageId };
-  } catch (error) {
-    console.error("[Contact] Failed:", error);
-    throw new Error("Failed to send contact message");
+  } catch (error: any) {
+    console.error("[Contact] Failed:", {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      stack: error.stack
+    });
+    throw new Error(`Failed to send contact message: ${error.code || error.message}`);
   }
 }
 
@@ -406,9 +426,15 @@ export async function sendOTPEmailVerify(
   try {
     const info = await mailer.sendMail(mailOptions);
     return { success: true, messageId: info.messageId };
-  } catch (error) {
-    console.error("[Email] Failed to send OTP:", error);
-    throw new Error("Failed to send verification email");
+  } catch (error: any) {
+    console.error("[Email] Failed to send OTP:", {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      stack: error.stack
+    });
+    throw new Error(`Failed to send verification email: ${error.code || error.message}`);
   }
 }
 

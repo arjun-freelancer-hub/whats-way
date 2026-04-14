@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -30,8 +31,12 @@ async function testConnection() {
     process.exit(1);
   }
 
-  const transporter = nodemailer.createTransport({
-    host: config.host,
+  const host = (config.host || '').toLowerCase() === 'smtp.gmail.com' 
+    ? 'smtp.googlemail.com' 
+    : (config.host || '');
+
+  const transportOptions: SMTPTransport.Options & { family?: number } = {
+    host,
     port: config.port,
     secure: config.secure,
     auth: {
@@ -43,13 +48,19 @@ async function testConnection() {
     greetingTimeout: 30000,
     socketTimeout: 30000,
     dnsTimeout: 10000,
+    // Force IPv4 to avoid common IPv6 resolution/connection issues
+    family: 4,
     tls: {
       rejectUnauthorized: false,
       ...(config.port === 587 ? { minVersion: 'TLSv1.2' } : {})
     },
+    // Require TLS for port 587
+    ...(config.port === 587 ? { requireTLS: true } : {}),
     debug: true,
     logger: true,
-  });
+  };
+
+  const transporter = nodemailer.createTransport(transportOptions);
 
   try {
     console.log('Testing connection...');
