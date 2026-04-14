@@ -52,6 +52,8 @@ export default function SMTPSettingsModal({
     password: "",
     fromName: existingData.fromName || "",
     fromEmail: existingData.fromEmail || "",
+    provider: existingData.provider || "smtp",
+    resendApiKey: existingData.resendApiKey || "",
     logo: existingData.logo || "",
   });
 
@@ -113,13 +115,24 @@ export default function SMTPSettingsModal({
   };
 
   const handleSubmit = async () => {
-    if (!form.host || !form.port || !form.user) {
-      toast({
-        title: "Missing fields",
-        description: "Please fill all required fields.",
-        variant: "destructive",
-      });
-      return;
+    if (form.provider === "smtp") {
+      if (!form.host || !form.port || !form.user) {
+        toast({
+          title: "Missing fields",
+          description: "Please fill all required SMTP fields.",
+          variant: "destructive",
+        });
+        return;
+      }
+    } else if (form.provider === "resend") {
+      if (!form.resendApiKey) {
+        toast({
+          title: "Missing fields",
+          description: "Please enter your Resend API Key.",
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     setLoading(true);
@@ -158,76 +171,130 @@ export default function SMTPSettingsModal({
         </DialogHeader>
 
         <div className="space-y-4 mt-4">
-          {/* Host */}
+          {/* Email Provider Selection */}
           <div>
-            <Label>SMTP Host *</Label>
-            <Input
-              value={form.host}
-              onChange={(e) => updateField("host", e.target.value)}
-              placeholder="smtp.gmail.com"
-            />
+            <Label>Email Provider</Label>
+            <div className="flex gap-4 mt-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="provider"
+                  value="smtp"
+                  checked={form.provider === "smtp"}
+                  onChange={() => updateField("provider", "smtp")}
+                />
+                <span>SMTP (Gmail/Custom)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="provider"
+                  value="resend"
+                  checked={form.provider === "resend"}
+                  onChange={() => updateField("provider", "resend")}
+                />
+                <span>Resend (Recommended for Railway)</span>
+              </label>
+            </div>
           </div>
 
-          {/* Port */}
-          <div>
-            <Label>Port *</Label>
-            <Input
-              value={form.port}
-              onChange={(e) => updateField("port", e.target.value)}
-              placeholder="587"
-              type="number"
-            />
-          </div>
+          {form.provider === "smtp" ? (
+            <>
+              {/* Host */}
+              <div>
+                <Label>SMTP Host *</Label>
+                <Input
+                  value={form.host}
+                  onChange={(e) => updateField("host", e.target.value)}
+                  placeholder="smtp.gmail.com"
+                />
+              </div>
 
-          {/* Secure */}
-          <div className="flex items-center gap-2 mt-2">
-            <input
-              type="checkbox"
-              checked={form.secure}
-              onChange={(e) => updateField("secure", e.target.checked)}
-            />
-            <Label>Use TLS (Secure)</Label>
-          </div>
+              <div className="grid grid-cols-2 gap-4">
+                {/* Port */}
+                <div>
+                  <Label>Port *</Label>
+                  <Input
+                    value={form.port}
+                    onChange={(e) => updateField("port", e.target.value)}
+                    placeholder="587"
+                    type="number"
+                  />
+                </div>
 
-          {/* User */}
-          <div>
-            <Label>SMTP Username *</Label>
-            <Input
-              value={form.user}
-              onChange={(e) => updateField("user", e.target.value)}
-              placeholder="email@example.com"
-            />
-          </div>
+                {/* Secure */}
+                <div className="flex items-center gap-2 pt-6">
+                  <input
+                    type="checkbox"
+                    checked={form.secure}
+                    onChange={(e) => updateField("secure", e.target.checked)}
+                  />
+                  <Label>Use TLS (Secure)</Label>
+                </div>
+              </div>
 
-          {/* Password */}
-          <div>
-            <Label>Password (leave blank to keep existing)</Label>
-            <Input
-              type="password"
-              value={form.password}
-              onChange={(e) => updateField("password", e.target.value)}
-              placeholder="••••••••"
-            />
-          </div>
+              {/* User */}
+              <div>
+                <Label>SMTP Username *</Label>
+                <Input
+                  value={form.user}
+                  onChange={(e) => updateField("user", e.target.value)}
+                  placeholder="email@example.com"
+                />
+              </div>
 
-          {/* From Name */}
-          <div>
-            <Label>From Name *</Label>
-            <Input
-              value={form.fromName}
-              onChange={(e) => updateField("fromName", e.target.value)}
-              placeholder="Your Company"
-            />
-          </div>
+              {/* Password */}
+              <div>
+                <Label>Password (leave blank to keep existing)</Label>
+                <Input
+                  type="password"
+                  value={form.password}
+                  onChange={(e) => updateField("password", e.target.value)}
+                  placeholder="••••••••"
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Resend API Key */}
+              <div>
+                <Label>Resend API Key *</Label>
+                <Input
+                  value={form.resendApiKey}
+                  onChange={(e) => updateField("resendApiKey", e.target.value)}
+                  placeholder="re_xxxxxxxxxxxxxxxxxxxxxxxx"
+                  type="password"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Get your API key from <a href="https://resend.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">resend.com</a>
+                </p>
+              </div>
+            </>
+          )}
 
-          {/* From Email */}
-          <div>
-            <Label>From Email *</Label>
-            <Input
-              value={form.fromEmail}
-              onChange={(e) => updateField("fromEmail", e.target.value)}
-              placeholder="no-reply@company.com"
-            />
+          <div className="border-t pt-4 mt-4">
+            <h4 className="text-sm font-medium mb-3">Sender Information</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* From Name */}
+              <div>
+                <Label>From Name *</Label>
+                <Input
+                  value={form.fromName}
+                  onChange={(e) => updateField("fromName", e.target.value)}
+                  placeholder="Your Company"
+                />
+              </div>
+
+              {/* From Email */}
+              <div>
+                <Label>From Email *</Label>
+                <Input
+                  value={form.fromEmail}
+                  onChange={(e) => updateField("fromEmail", e.target.value)}
+                  placeholder="no-reply@company.com"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Logo */}

@@ -50,12 +50,14 @@ import { useAuth } from "@/contexts/auth-context";
 interface SMTPConfig {
   id?: string;
   host?: string;
-  port?: string;
-  secure?: string;
+  port?: string | number;
+  secure?: boolean | string;
   user?: string;
   password?: string;
   fromName?: string;
   fromEmail?: string;
+  provider?: string;
+  resendApiKey?: string;
   logo?: string;
   updatedAt?: string;
 }
@@ -127,6 +129,13 @@ export default function SMTPSettings() {
 
             <div className="flex items-center gap-2 flex-wrap">
               <Badge
+                variant="outline"
+                className="text-xs bg-muted"
+              >
+                Provider: {displayData.provider === "resend" ? "Resend API" : "SMTP Server"}
+              </Badge>
+
+              <Badge
                 variant={isUsingStaticData ? "destructive" : "default"}
                 className="text-xs"
               >
@@ -154,18 +163,17 @@ export default function SMTPSettings() {
               </Button>
 
               <Button
-  size="sm"
-  onClick={() => setShowEditDialog(true)}
-  className="text-xs"
->
-  <Edit className="w-4 h-4 mr-2" />
-  Edit SMTP
-</Button>
-
+                size="sm"
+                onClick={() => setShowEditDialog(true)}
+                className="text-xs"
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                Edit Settings
+              </Button>
             </div>
           </div>
 
-          <CardDescription>Manage outgoing email server and credentials</CardDescription>
+          <CardDescription>Manage outgoing email {displayData.provider === "resend" ? "API" : "server"} and credentials</CardDescription>
         </CardHeader>
 
         <CardContent>
@@ -185,7 +193,9 @@ export default function SMTPSettings() {
 
           <div className="border p-6 rounded-lg">
             <div className="flex justify-between mb-6">
-              <h3 className="text-lg font-semibold">SMTP Details</h3>
+              <h3 className="text-lg font-semibold">
+                {displayData.provider === "resend" ? "Resend Configuration" : "SMTP Details"}
+              </h3>
 
               {displayData.updatedAt && (
                 <div className="flex items-center text-sm text-gray-500">
@@ -196,44 +206,65 @@ export default function SMTPSettings() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* host */}
-              <div>
-                <Label className="flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-blue-500" /> SMTP Host
-                </Label>
-                <p className="mt-2 p-3 bg-gray-100 rounded border">
-                  {displayData.host || "Not configured"}
-                </p>
-              </div>
+              {displayData.provider === "resend" ? (
+                <>
+                  {/* API Key */}
+                  <div className="md:col-span-2">
+                    <Label className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-blue-500" /> Resend API Key
+                    </Label>
+                    <p className="mt-2 p-3 bg-gray-100 rounded border font-mono">
+                      {displayData.resendApiKey ? "••••••••••••••••••••••••" : "Not configured"}
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* host */}
+                  <div>
+                    <Label className="flex items-center gap-2">
+                      <Globe className="w-4 h-4 text-blue-500" /> SMTP Host
+                    </Label>
+                    <p className="mt-2 p-3 bg-gray-100 rounded border">
+                      {displayData.host || "Not configured"}
+                    </p>
+                  </div>
 
-              {/* port */}
-              <div>
-                <Label className="flex items-center gap-2">
-                  <Server className="w-4 h-4 text-purple-500" /> Port
-                </Label>
-                <p className="mt-2 p-3 bg-gray-100 rounded border">
-                  {displayData.port || "Not provided"}
-                </p>
-              </div>
+                  {/* port */}
+                  <div>
+                    <Label className="flex items-center gap-2">
+                      <Server className="w-4 h-4 text-purple-500" /> Port
+                    </Label>
+                    <p className="mt-2 p-3 bg-gray-100 rounded border">
+                      {displayData.port || "Not provided"}
+                    </p>
+                  </div>
 
-              {/* secure */}
-              <div>
-                <Label className="flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-green-600" /> Secure (TLS)
-                </Label>
-                <p className="mt-2 p-3 bg-gray-100 rounded border">
-                  {displayData.secure === true ? "Enabled" : "Disabled"}
-                </p>
-              </div>
+                  {/* secure */}
+                  <div>
+                    <Label className="flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-green-600" /> Secure (TLS)
+                    </Label>
+                    <p className="mt-2 p-3 bg-gray-100 rounded border">
+                      {(displayData.secure === true || displayData.secure === "true") ? "Enabled" : "Disabled"}
+                    </p>
+                  </div>
 
-              {/* user */}
-              <div>
-                <Label className="flex items-center gap-2">
-                  <User className="w-4 h-4 text-orange-600" /> SMTP User
-                </Label>
-                <p className="mt-2 p-3 bg-gray-100 rounded border">
-                  {displayData.user ? "********" : "Not configured"}
-                </p>
+                  {/* user */}
+                  <div>
+                    <Label className="flex items-center gap-2">
+                      <User className="w-4 h-4 text-orange-600" /> SMTP User
+                    </Label>
+                    <p className="mt-2 p-3 bg-gray-100 rounded border">
+                      {displayData.user ? "********" : "Not configured"}
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {/* sender section header */}
+              <div className="md:col-span-2 border-t pt-4 mt-2">
+                <h4 className="text-sm font-semibold mb-4 text-gray-600">Sender Information</h4>
               </div>
 
               {/* from name */}

@@ -25,7 +25,7 @@ import {
   users,
 } from "@shared/schema";
 import { db } from "server/db";
-import nodemailer from "nodemailer";
+import { sendMail } from "./email.service";
 
 export const NOTIFICATION_EVENTS = {
   NEW_MESSAGE: 'new_message',
@@ -40,28 +40,6 @@ export const NOTIFICATION_EVENTS = {
 
 function replaceVariables(text: string, variables: Record<string, string>): string {
   return text.replace(/\{\{(\w+)\}\}/g, (_, key) => variables[key] ?? `{{${key}}}`);
-}
-
-async function getEmailTransporter() {
-  const { getSMTPConfig } = await import("server/controllers/smtp.controller");
-  const config = await getSMTPConfig();
-  if (config) {
-    const port = parseInt(config.port, 10);
-    const secure = port === 465;
-    return nodemailer.createTransport({
-      host: config.host,
-      port,
-      secure,
-      ...(!secure && (port === 587 || !!config.secure) ? { requireTLS: true } : {}),
-      auth: {
-        user: config.user,
-        pass: config.password,
-      },
-    });
-  }
-  return nodemailer.createTransport({
-    jsonTransport: true,
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -85,16 +63,19 @@ function _isTransientSmtpError(error: any): boolean {
 }
 
 async function _sendMailWithRetry(
-  mailOptions: Record<string, any>,
+  mailOptions: any,
   attempt: number = 1
 ): Promise<{ success: boolean; retryScheduled?: boolean; messageId?: string; error?: any }> {
   try {
-    const transporter = await getEmailTransporter();
-    const info = await transporter.sendMail(mailOptions);
+    const result = await sendMail(mailOptions);
     console.log(`✉️ [Notification Email] Sent to: ${mailOptions.to}` + (attempt > 1 ? ` (attempt ${attempt}/${MAX_SMTP_ATTEMPTS})` : ""));
-    return { success: true, messageId: info.messageId };
+    return { success: true, messageId: result.messageId };
   } catch (error: any) {
-    if (_isTransientSmtpError(error) && attempt < MAX_SMTP_ATTEMPTS) {
+    // Retry logic only for SMTP transient errors
+    const { getSMTPConfig } = await import("server/controllers/smtp.controller");
+    const config = await getSMTPConfig();
+    
+    if (config?.provider === 'smtp' && _isTransientSmtpError(error) && attempt < MAX_SMTP_ATTEMPTS) {
       const delay = SMTP_RETRY_DELAYS_MS[attempt - 1] ?? 30_000;
       console.warn(
         `⚠️ [Notification Email] Transient SMTP error for ${mailOptions.to} (attempt ${attempt}/${MAX_SMTP_ATTEMPTS}), retrying in ${delay / 1000}s — ${error?.response || error?.message || "unknown error"}`
@@ -102,9 +83,9 @@ async function _sendMailWithRetry(
       setTimeout(() => {
         _sendMailWithRetry(mailOptions, attempt + 1).catch(() => {});
       }, delay);
-      // retryScheduled: true lets callers distinguish "will retry" from permanent failure
       return { success: false, retryScheduled: true, error };
     }
+    
     console.error(
       `❌ [Notification Email] Permanent failure sending to ${mailOptions.to}` +
         (attempt > 1 ? ` (gave up after ${attempt} attempt(s))` : "") +
@@ -115,16 +96,11 @@ async function _sendMailWithRetry(
 }
 
 export async function sendNotificationEmail(to: string, subject: string, htmlBody: string) {
-  const { getSMTPConfig } = await import("server/controllers/smtp.controller");
-  const config = await getSMTPConfig();
-  const fromName = config?.fromName || "Notifications";
-  const fromEmail = config?.fromEmail || "noreply@example.com";
-
   const mailOptions = {
-    from: `"${fromName}" <${fromEmail}>`,
     to,
     subject,
     html: htmlBody,
+    text: htmlBody.replace(/<[^>]*>?/gm, ''), // Simple HTML to text conversion
   };
 
   return _sendMailWithRetry(mailOptions);

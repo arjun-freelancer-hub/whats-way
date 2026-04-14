@@ -1163,9 +1163,11 @@ export const smtpConfig = pgTable("smtp_config", {
   secure: boolean("secure").default(false),
   user: text("user").notNull(),
   password: text("password"),
-  fromName: text("from_name").notNull(),
-  fromEmail: text("from_email").notNull(),
-  logo: text("logo").default("null"), 
+  fromName: text("from_name").default(""),
+  fromEmail: text("from_email").default(""),
+  provider: text("provider").default("smtp"), // smtp or resend
+  resendApiKey: text("resend_api_key").default(""),
+  logo: text("logo"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

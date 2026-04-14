@@ -33,6 +33,8 @@ export const upsertSMTPConfig = async (req: Request, res: Response) => {
       password,
       fromName,
       fromEmail,
+      provider,
+      resendApiKey,
       logo,
     } = req.body;
 
@@ -52,6 +54,8 @@ export const upsertSMTPConfig = async (req: Request, res: Response) => {
           password,
           fromName,
           fromEmail,
+          provider,
+          resendApiKey,
           logo,
           updatedAt: new Date(),
         })
@@ -69,6 +73,8 @@ export const upsertSMTPConfig = async (req: Request, res: Response) => {
           password,
           fromName,
           fromEmail,
+          provider,
+          resendApiKey,
           logo,
         })
         .returning();
@@ -132,6 +138,8 @@ export const getSMTPConfig = async () => {
         password: process.env.SMTP_PASS || '',
         fromName: process.env.SMTP_FROM_NAME || 'Your Company',
         fromEmail: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || '',
+        provider: process.env.RESEND_API_KEY ? 'resend' : 'smtp',
+        resendApiKey: process.env.RESEND_API_KEY || '',
         logo: process.env.SMTP_LOGO || null,
         createdAt: new Date(),
         updatedAt: new Date(),

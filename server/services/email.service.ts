@@ -18,6 +18,7 @@
 import nodemailer from "nodemailer";
 import SMTPTransport from "nodemailer/lib/smtp-transport";
 import dns from "dns";
+import fetch from "node-fetch";
 import { getSMTPConfig } from "server/controllers/smtp.controller";
 import { getPanelConfigs } from "./panel.config";
 import { cacheInvalidate, CACHE_KEYS } from './cache';
@@ -274,6 +275,88 @@ function generateForgotPasswordEmailText(
   });
 }
 
+async function sendViaResend(options: {
+  fromEmail: string;
+  fromName: string;
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  apiKey: string;
+}) {
+  const { fromEmail, fromName, to, subject, html, text, apiKey } = options;
+
+  // Resend requires a verified domain or uses onboarding@resend.dev for testing
+  // We use the configured fromEmail, but if it's not verified, Resend might reject it.
+  const from = `${fromName} <${fromEmail}>`;
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      from,
+      to: [to],
+      subject,
+      html,
+      text,
+    }),
+  });
+
+  const result: any = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to send email via Resend");
+  }
+
+  return { success: true, messageId: result.id };
+}
+
+export async function sendMail(options: {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  fromName?: string;
+  fromEmail?: string;
+}) {
+  const config = await getConfig();
+  const configs = await getPanelConfig();
+
+  const companyName = configs?.name || "Your Company";
+  const fromName = options.fromName || config?.fromName || companyName;
+  const fromEmail = options.fromEmail || config?.fromEmail || config?.user || process.env.SMTP_USER;
+
+  if (config?.provider === 'resend' || (!config && process.env.RESEND_API_KEY)) {
+    const apiKey = config?.resendApiKey || process.env.RESEND_API_KEY;
+    if (apiKey) {
+      return sendViaResend({ 
+        fromEmail: fromEmail!, 
+        fromName, 
+        to: options.to, 
+        subject: options.subject, 
+        html: options.html, 
+        text: options.text, 
+        apiKey 
+      });
+    }
+  }
+
+  const mailer = await getTransporter();
+  const mailOptions = {
+    from: `"${fromName}" <${fromEmail}>`,
+    to: options.to,
+    subject: options.subject,
+    html: options.html,
+    text: options.text,
+  };
+
+  const info = await mailer.sendMail(mailOptions);
+  return { success: true, messageId: info.messageId };
+}
+
 export async function sendOTPEmail(
   email: string,
   otpCode: string,
@@ -281,38 +364,27 @@ export async function sendOTPEmail(
 ) {
   const config = await getConfig();
   const configs = await getPanelConfig();
-  const mailer = await getTransporter();
 
   const companyName = configs?.name || "Your Company";
-  const fromName = config?.fromName || companyName;
-  const fromEmail = config?.fromEmail || config?.user || process.env.SMTP_USER;
-
-  const mailOptions = {
-    from: `"${fromName}" <${fromEmail}>`,
-    to: email,
-    subject: `Your ${companyName} Verification Code`,
-    html: generateForgotPasswordEmailHTML(
-      companyName,
-      resolveLogoUrl(config?.logo, configs?.logo),
-      otpCode,
-      name
-    ),
-    text: generateForgotPasswordEmailText(companyName, otpCode, name),
-  };
+  
+  const html = generateForgotPasswordEmailHTML(
+    companyName,
+    resolveLogoUrl(config?.logo, configs?.logo),
+    otpCode,
+    name
+  );
+  const text = generateForgotPasswordEmailText(companyName, otpCode, name);
+  const subject = `Your ${companyName} Verification Code`;
 
   try {
-    const info = await mailer.sendMail(mailOptions);
-    console.log(`[Email] OTP sent successfully to ${email}. MessageId: ${info.messageId}`);
-    return { success: true, messageId: info.messageId };
+    const result = await sendMail({ to: email, subject, html, text });
+    console.log(`[Email] OTP sent successfully to ${email}. MessageId: ${result.messageId}`);
+    return result;
   } catch (error: any) {
     console.error("[Email] Failed to send OTP:", {
       email,
-      host: config?.host,
-      port: config?.port,
       message: error.message,
       code: error.code,
-      command: error.command,
-      response: error.response,
       stack: error.stack
     });
     throw new Error(`Failed to send verification email: ${error.code || error.message}`);
@@ -327,14 +399,8 @@ export async function sendContactEmail(data: {
   message: string;
 }) {
   const { name, email, company, subject, message } = data;
-
-  const config = await getConfig();
   const configs = await getPanelConfig();
-  const mailer = await getTransporter();
-
   const companyName = configs?.name || "Your Company";
-  const fromName = config?.fromName || companyName;
-  const fromEmail = config?.fromEmail || config?.user || process.env.SMTP_USER;
 
   const html = `
   <div style="background:#f4f5f7; padding:40px; font-family:Arial, sans-serif;">
@@ -377,23 +443,17 @@ export async function sendContactEmail(data: {
   </div>
 `;
 
-  const mailOptions = {
-    from: `"${fromName}" <${fromEmail}>`,
-    to: fromEmail,
-    subject: `Contact Form: ${subject}`,
-    html,
-    text: `${name} (${email}) says: ${message}`,
-  };
-
   try {
-    const info = await mailer.sendMail(mailOptions);
-    return { success: true, messageId: info.messageId };
+    return await sendMail({
+      to: (await getConfig())?.fromEmail || process.env.SMTP_FROM_EMAIL || "",
+      subject: `Contact Form: ${subject}`,
+      html,
+      text: `${name} (${email}) says: ${message}`,
+    });
   } catch (error: any) {
     console.error("[Contact] Failed:", {
       message: error.message,
       code: error.code,
-      command: error.command,
-      response: error.response,
       stack: error.stack
     });
     throw new Error(`Failed to send contact message: ${error.code || error.message}`);
@@ -407,33 +467,22 @@ export async function sendOTPEmailVerify(
 ) {
   const config = await getConfig();
   const configs = await getPanelConfig();
-  const mailer = await getTransporter();
 
   const companyName = configs?.name || "Your Company";
-  const fromName = config?.fromName || companyName;
-  const fromEmail = config?.fromEmail || config?.user || process.env.SMTP_USER;
 
-  const mailOptions = {
-    from: `"${fromName}" <${fromEmail}>`,
-    to: email,
-    subject: `Your ${companyName} Verification Code`,
-    html: generateOTPEmailHTML(companyName, resolveLogoUrl(config?.logo, configs?.logo), otpCode, name),
-    text: generateOTPEmailText(companyName, otpCode, name),
-  };
+  const html = generateOTPEmailHTML(companyName, resolveLogoUrl(config?.logo, configs?.logo), otpCode, name);
+  const text = generateOTPEmailText(companyName, otpCode, name);
+  const subject = `Your ${companyName} Verification Code`;
 
   try {
-    const info = await mailer.sendMail(mailOptions);
-    console.log(`[Email] Verify OTP sent successfully to ${email}. MessageId: ${info.messageId}`);
-    return { success: true, messageId: info.messageId };
+    const result = await sendMail({ to: email, subject, html, text });
+    console.log(`[Email] Verify OTP sent successfully to ${email}. MessageId: ${result.messageId}`);
+    return result;
   } catch (error: any) {
     console.error("[Email] Failed to send Verify OTP:", {
       email,
-      host: config?.host,
-      port: config?.port,
       message: error.message,
       code: error.code,
-      command: error.command,
-      response: error.response,
       stack: error.stack
     });
     throw new Error(`Failed to send verification email: ${error.code || error.message}`);
