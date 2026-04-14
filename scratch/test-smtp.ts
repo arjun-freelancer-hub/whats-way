@@ -31,17 +31,13 @@ async function testConnection() {
     process.exit(1);
   }
 
-  const host = (config.host || '').toLowerCase() === 'smtp.gmail.com' 
-    ? 'smtp.googlemail.com' 
-    : (config.host || '');
-
   const transportOptions: SMTPTransport.Options & { family?: number } = {
-    host,
+    host: config.host || '',
     port: config.port,
     secure: config.secure,
     auth: {
-      user: config.user,
-      pass: config.pass,
+      user: config.user || '',
+      pass: config.pass || '',
     },
     // Using the same robustness settings as the updated app
     connectionTimeout: 30000,

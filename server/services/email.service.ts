@@ -17,10 +17,9 @@
 
 import nodemailer from "nodemailer";
 import SMTPTransport from "nodemailer/lib/smtp-transport";
-import { diployLogger, HTTP_STATUS, DIPLOY_BRAND } from "@diploy/core";
 import { getSMTPConfig } from "server/controllers/smtp.controller";
-import { getFirstPanelConfig, getPanelConfigs } from "./panel.config";
-import { cacheGet, cacheInvalidate, CACHE_KEYS, CACHE_TTL } from './cache';
+import { getPanelConfigs } from "./panel.config";
+import { cacheInvalidate, CACHE_KEYS } from './cache';
 
 let transporter: any = null;
 
@@ -45,19 +44,19 @@ async function getTransporter() {
     // This prevents connection hangs due to misconfiguration.
     const secure = port === 465;
 
-    console.info(`[Email] Initializing SMTP: ${config.host}:${port} (secure: ${secure})`);
+    const user = config.user || '';
+    const pass = config.password || '';
 
-    const host = (config.host || '').toLowerCase() === 'smtp.gmail.com' 
-      ? 'smtp.googlemail.com' 
-      : (config.host || '');
+    console.info(`[Email] Initializing SMTP: ${config.host}:${port} (secure: ${secure})`);
+    console.info(`[Email] Authentication: User=${user.slice(0, 3)}***@***, Pass=*** (Length: ${pass.length})`);
 
     const transportOptions: SMTPTransport.Options & { family?: number } = {
-      host,
+      host: config.host,
       port,
       secure,
       auth: {
-        user: config.user || '',
-        pass: config.password || '',
+        user,
+        pass,
       },
       // Robustness settings
       connectionTimeout: 30000,
@@ -79,6 +78,22 @@ async function getTransporter() {
     };
 
     transporter = nodemailer.createTransport(transportOptions);
+
+    // Diagnostic verify on initialization
+    try {
+      console.log(`[Email] Testing connection to ${config.host}...`);
+      await transporter.verify();
+      console.log(`[Email] SMTP Connection verified successfully!`);
+    } catch (verifyError: any) {
+      console.error(`[Email] SMTP Initialization Verify Failed:`, {
+        message: verifyError.message,
+        code: verifyError.code,
+        command: verifyError.command,
+        response: verifyError.response,
+        stack: verifyError.stack
+      });
+      // We don't throw here to allow the app to start, but the error is now visible
+    }
   } else {
     console.warn("[Email] Using fallback SMTP settings (emails will not be sent)");
     transporter = nodemailer.createTransport({
@@ -104,18 +119,19 @@ export function resetEmailCache() {
   cacheInvalidate(CACHE_KEYS.panelConfig()).catch(() => { });
 }
 
-function generateOTPEmailHTML(
-  companyName?: string,
-  logo?: string,
-  otpCode?: string,
-  name?: string
-): string {
+function generateEmailHTML(options: {
+  companyName?: string;
+  logo?: string;
+  otpCode?: string;
+  name?: string;
+  title: string;
+  message: string;
+}): string {
+  const { companyName, logo, otpCode, name, title, message } = options;
   const displayName = companyName || "Your Company";
   const headerContent = logo
     ? `<img src="${logo}" alt="${displayName} Logo" style="max-height: 60px; margin-bottom: 10px;">`
     : `<div class="logo">${displayName}</div>`;
-
-  const messageText = `Please use the verification code below to verify your identity.`;
 
   return `
     <!DOCTYPE html>
@@ -139,12 +155,12 @@ function generateOTPEmailHTML(
       <div class="container">
         <div class="header">
           ${headerContent}
-          <p style="color: #6b7280; margin: 0;">Our Platform</p>
+          <p style="color: #6b7280; margin: 0;">${title}</p>
         </div>
         
         <div class="message">
           ${name ? `<p>Hello <strong>${name}</strong>,</p>` : "<p>Hello,</p>"}
-          <p>${messageText}</p>
+          <p>${message}</p>
         </div>
         
         <div class="otp-box">
@@ -157,10 +173,6 @@ function generateOTPEmailHTML(
           <strong>Security Notice:</strong> Never share this code with anyone. ${displayName} will never ask for your verification code.
         </div>
         
-        <div class="message">
-          <p>If you didn't request this code, please ignore this email or contact our support team.</p>
-        </div>
-        
         <div class="footer">
           <p>This is an automated message from ${displayName}.</p>
           <p>&copy; ${new Date().getFullYear()} ${displayName}. All rights reserved.</p>
@@ -171,15 +183,49 @@ function generateOTPEmailHTML(
   `;
 }
 
-function generateOTPEmailText(
-  companyName: string,
-  otpCode: string,
+function generateOTPEmailHTML(
+  companyName?: string,
+  logo?: string,
+  otpCode?: string,
   name?: string
 ): string {
+  return generateEmailHTML({
+    companyName,
+    logo,
+    otpCode,
+    name,
+    title: "Identity Verification",
+    message: "Please use the verification code below to verify your identity."
+  });
+}
+
+function generateForgotPasswordEmailHTML(
+  companyName?: string,
+  logo?: string,
+  otpCode?: string,
+  name?: string
+): string {
+  return generateEmailHTML({
+    companyName,
+    logo,
+    otpCode,
+    name,
+    title: "Password Reset Request",
+    message: "You requested to reset your password. Use the verification code below to reset your password."
+  });
+}
+
+function generateEmailText(options: {
+  companyName: string;
+  otpCode: string;
+  name?: string;
+  message: string;
+}): string {
+  const { companyName, otpCode, name, message } = options;
   return `
 Hello${name ? " " + name : ""},
 
-Thank you for signing up for ${companyName}!
+${message}
 
 Your verification code is: ${otpCode}
 
@@ -189,73 +235,20 @@ If you didn't request this code, please ignore this email.
 
 ---
 ${companyName}
-Our Platform
   `.trim();
 }
 
-function generateForgotPasswordEmailHTML(
-  companyName?: string,
-  logo?: string,
-  otpCode?: string,
+function generateOTPEmailText(
+  companyName: string,
+  otpCode: string,
   name?: string
 ): string {
-  const displayName = companyName || "Your Company";
-  const headerContent = logo
-    ? `<img src="${logo}" alt="${displayName} Logo" style="max-height: 60px; margin-bottom: 10px;">`
-    : `<div class="logo">${displayName}</div>`;
-
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-        .container { background: #ffffff; border-radius: 8px; padding: 40px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
-        .header { text-align: center; margin-bottom: 30px; }
-        .logo { font-size: 28px; font-weight: bold; color: #1f2937; margin-bottom: 10px; }
-        .otp-box { background: #f3f4f6; border: 2px solid #e5e7eb; border-radius: 8px; padding: 20px; text-align: center; margin: 30px 0; }
-        .otp-code { font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #1f2937; font-family: 'Courier New', monospace; }
-        .message { font-size: 16px; color: #4b5563; margin: 20px 0; }
-        .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; margin: 20px 0; font-size: 14px; color: #92400e; }
-        .footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          ${headerContent}
-          <p style="color: #6b7280; margin: 0;">Our Platform</p>
-        </div>
-
-        <div class="message">
-          ${name ? `<p>Hello <strong>${name}</strong>,</p>` : "<p>Hello,</p>"}
-          <p>You requested to reset your password. Use the verification code below to reset your password.</p>
-        </div>
-
-        <div class="otp-box">
-          <div style="font-size: 14px; color: #6b7280; margin-bottom: 10px;">Your Verification Code</div>
-          <div class="otp-code">${otpCode}</div>
-          <div style="font-size: 12px; color: #9ca3af; margin-top: 10px;">Valid for 5 minutes</div>
-        </div>
-
-        <div class="warning">
-          <strong>Security Notice:</strong> Never share this code with anyone. ${displayName} will never ask for your verification code.
-        </div>
-
-        <div class="message">
-          <p>If you didn't request this password reset, please ignore this email or contact our support team.</p>
-        </div>
-
-        <div class="footer">
-          <p>This is an automated message from ${displayName}.</p>
-          <p>&copy; ${new Date().getFullYear()} ${displayName}. All rights reserved.</p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
+  return generateEmailText({
+    companyName,
+    otpCode,
+    name,
+    message: `Thank you for signing up for ${companyName}!`
+  });
 }
 
 function generateForgotPasswordEmailText(
@@ -263,21 +256,12 @@ function generateForgotPasswordEmailText(
   otpCode: string,
   name?: string
 ): string {
-  return `
-Hello${name ? " " + name : ""},
-
-You requested to reset your password for ${companyName}.
-
-Your verification code is: ${otpCode}
-
-This code will expire in 5 minutes.
-
-If you didn't request a password reset, please ignore this email.
-
----
-${companyName}
-Our Platform
-  `.trim();
+  return generateEmailText({
+    companyName,
+    otpCode,
+    name,
+    message: `You requested to reset your password for ${companyName}.`
+  });
 }
 
 export async function sendOTPEmail(
@@ -308,9 +292,13 @@ export async function sendOTPEmail(
 
   try {
     const info = await mailer.sendMail(mailOptions);
+    console.log(`[Email] OTP sent successfully to ${email}. MessageId: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (error: any) {
     console.error("[Email] Failed to send OTP:", {
+      email,
+      host: config?.host,
+      port: config?.port,
       message: error.message,
       code: error.code,
       command: error.command,
@@ -425,9 +413,13 @@ export async function sendOTPEmailVerify(
 
   try {
     const info = await mailer.sendMail(mailOptions);
+    console.log(`[Email] Verify OTP sent successfully to ${email}. MessageId: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (error: any) {
-    console.error("[Email] Failed to send OTP:", {
+    console.error("[Email] Failed to send Verify OTP:", {
+      email,
+      host: config?.host,
+      port: config?.port,
       message: error.message,
       code: error.code,
       command: error.command,
