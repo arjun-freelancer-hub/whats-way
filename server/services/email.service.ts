@@ -16,6 +16,7 @@
  */
 
 import nodemailer from "nodemailer";
+import SMTPTransport from "nodemailer/lib/smtp-transport";
 import { diployLogger, HTTP_STATUS, DIPLOY_BRAND } from "@diploy/core";
 import { getSMTPConfig } from "server/controllers/smtp.controller";
 import { getFirstPanelConfig, getPanelConfigs } from "./panel.config";
@@ -27,7 +28,7 @@ function resolveLogoUrl(smtpLogo?: string | null, panelLogo?: string | null): st
   const logo = smtpLogo || panelLogo;
   if (!logo) return undefined;
   if (logo.startsWith("http://") || logo.startsWith("https://")) return logo;
-  const baseUrl = (process.env.APP_URL || ("" ? `https://${""}` : "")).replace(/\/$/, "");
+  const baseUrl = (process.env.APP_URL || "").replace(/\/$/, "");
   if (!baseUrl) return undefined;
   const path = logo.startsWith("/") ? logo : `/uploads/${logo}`;
   return `${baseUrl}${path}`;
@@ -39,24 +40,35 @@ async function getTransporter() {
   const config = await getSMTPConfig();
 
   if (config) {
-    const port = parseInt(config.port, 10);
-    const secure = port === 465;
+    const port = Number(config.port);
+    const secure = config.secure === true || port === 465;
 
     console.info(`[Email] Initializing SMTP: ${config.host}:${port} (secure: ${secure})`);
 
-    transporter = nodemailer.createTransport({
-      host: config.host,
+    const transportOptions: SMTPTransport.Options = {
+      host: config.host || '',
       port,
       secure,
-      ...(!secure && (port === 587 || !!config.secure) ? { requireTLS: true } : {}),
       auth: {
-        user: config.user,
-        pass: config.password,
+        user: config.user || '',
+        pass: config.password || '',
       },
-      // Added timeout and debugging settings
-      connectionTimeout: 10000, 
-      greetingTimeout: 10000,
-    });
+      // Robustness settings
+      connectionTimeout: 30000,
+      greetingTimeout: 30000,
+      socketTimeout: 30000,
+      dnsTimeout: 10000,
+      tls: {
+        rejectUnauthorized: false,
+        // Ensure STARTTLS is used for port 587
+        ...(port === 587 ? { minVersion: 'TLSv1.2' } : {})
+      },
+      // Enable logging based on debug mode
+      debug: process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development',
+      logger: process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development',
+    };
+
+    transporter = nodemailer.createTransport(transportOptions);
   } else {
     console.warn("[Email] Using fallback SMTP settings (emails will not be sent)");
     transporter = nodemailer.createTransport({
@@ -78,8 +90,8 @@ async function getPanelConfig() {
 
 export function resetEmailCache() {
   transporter = null;
-  cacheInvalidate(CACHE_KEYS.smtpConfig()).catch(() => {});
-  cacheInvalidate(CACHE_KEYS.panelConfig()).catch(() => {});
+  cacheInvalidate(CACHE_KEYS.smtpConfig()).catch(() => { });
+  cacheInvalidate(CACHE_KEYS.panelConfig()).catch(() => { });
 }
 
 function generateOTPEmailHTML(

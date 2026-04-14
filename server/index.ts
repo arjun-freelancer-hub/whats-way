@@ -84,8 +84,8 @@ if (process.env.REDIS_URL) {
       const pubClient = new Redis(redisUrl, redisOpts);
       const subClient = new Redis(redisUrl, redisOpts);
 
-      pubClient.on("error", () => {});
-      subClient.on("error", () => {});
+      pubClient.on("error", () => { });
+      subClient.on("error", () => { });
 
       const timeout = (ms: number) => new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms));
 
@@ -136,12 +136,12 @@ io.on("connection", (socket) => {
   }
 
 
-   socket.on("test_event", (data) => {
-      console.log("🔥 TEST EVENT RECEIVED:", data);
-  
-      socket.emit("test_response", { msg: "Server se response aaya!" });
-    });
-    socket.on("join-room", ({ room }) => {
+  socket.on("test_event", (data) => {
+    console.log("🔥 TEST EVENT RECEIVED:", data);
+
+    socket.emit("test_response", { msg: "Server se response aaya!" });
+  });
+  socket.on("join-room", ({ room }) => {
     console.log("📥 Socket joined room:", room);
     socket.join(room);
   });
@@ -151,29 +151,29 @@ io.on("connection", (socket) => {
     console.log("📤 Left:", room);
   });
 
-  
-  
-       // ============================================
-    // GET CONVERSATIONS LIST (AGENT SIDE)
-    // ============================================
-    socket.on("get_conversations", async ({ channelId }) => {
-      try {
-        console.log("🔥 get_conversations called for channel:", channelId);
-  
-        const list = await fetchConversationList(channelId);
-  
-        console.log("🔥 conversations_list sending:", list?.length || 0);
-  
-        socket.emit("conversations_list", list);
-  
-      } catch (err) {
-        console.error("Error fetching conversations via socket:", err);
-      }
-    });
-  
-  
-  
-  
+
+
+  // ============================================
+  // GET CONVERSATIONS LIST (AGENT SIDE)
+  // ============================================
+  socket.on("get_conversations", async ({ channelId }) => {
+    try {
+      console.log("🔥 get_conversations called for channel:", channelId);
+
+      const list = await fetchConversationList(channelId);
+
+      console.log("🔥 conversations_list sending:", list?.length || 0);
+
+      socket.emit("conversations_list", list);
+
+    } catch (err) {
+      console.error("Error fetching conversations via socket:", err);
+    }
+  });
+
+
+
+
 
   // ==========================================
   // AGENT EVENTS
@@ -181,7 +181,7 @@ io.on("connection", (socket) => {
 
   // Agent joins a conversation
 
-   socket.on(
+  socket.on(
     "agent_join_conversation",
     async ({ conversationId, agentId, agentName }) => {
       console.log(`Agent ${agentName} joining conversation ${conversationId}`);
@@ -218,7 +218,7 @@ io.on("connection", (socket) => {
       } catch (error) {
         console.error("Error updating conversation:", error);
       }
-      
+
       console.log(`✅ Agent joined both room formats for ${conversationId}`);
     }
   );
@@ -228,7 +228,7 @@ io.on("connection", (socket) => {
       console.log(`Agent ${agentName} joining conversation ${conversationId}`);
 
       socket.join(`conversation:${conversationId}`);
-      socket.join(`conversation_${conversationId}`); 
+      socket.join(`conversation_${conversationId}`);
 
       const user = connectedUsers.get(socket.id);
       if (user) {
@@ -340,41 +340,41 @@ io.on("connection", (socket) => {
     }
   });
 
-  
 
-socket.on('join_all_conversations', ({ channelId, userId }) => {
-  console.log(`✅ JOIN_ALL_CONVERSATIONS: User ${userId} joining channel ${channelId}`);
-  socket.join(`channel:${channelId}`);
-  socket.join(`user:${userId}`);
-  console.log(`✅ Successfully joined channel:${channelId}`);
-  
-  socket.emit('joined_channel', {
-    channelId,
-    userId,
-    message: 'Successfully joined channel room'
+
+  socket.on('join_all_conversations', ({ channelId, userId }) => {
+    console.log(`✅ JOIN_ALL_CONVERSATIONS: User ${userId} joining channel ${channelId}`);
+    socket.join(`channel:${channelId}`);
+    socket.join(`user:${userId}`);
+    console.log(`✅ Successfully joined channel:${channelId}`);
+
+    socket.emit('joined_channel', {
+      channelId,
+      userId,
+      message: 'Successfully joined channel room'
+    });
   });
-});
 
-socket.on('join_conversation', ({ conversationId, userId }) => {
-  console.log(`✅ JOIN_CONVERSATION: ${userId} joining ${conversationId}`);
-  socket.join(`conversation_${conversationId}`);
-  socket.join(`conversation:${conversationId}`);
-  
-  if (!conversationRooms.has(conversationId)) {
-    conversationRooms.set(conversationId, new Set());
-  }
-  conversationRooms.get(conversationId)?.add(socket.id);
-  console.log(`✅ Joined conversation_${conversationId}`);
-});
+  socket.on('join_conversation', ({ conversationId, userId }) => {
+    console.log(`✅ JOIN_CONVERSATION: ${userId} joining ${conversationId}`);
+    socket.join(`conversation_${conversationId}`);
+    socket.join(`conversation:${conversationId}`);
 
-socket.on('leave_conversation', ({ conversationId, userId }) => {
-  socket.leave(`conversation_${conversationId}`);
-  socket.leave(`conversation:${conversationId}`);
-  const room = conversationRooms.get(conversationId);
-  if (room) {
-    room.delete(socket.id);
-  }
-});
+    if (!conversationRooms.has(conversationId)) {
+      conversationRooms.set(conversationId, new Set());
+    }
+    conversationRooms.get(conversationId)?.add(socket.id);
+    console.log(`✅ Joined conversation_${conversationId}`);
+  });
+
+  socket.on('leave_conversation', ({ conversationId, userId }) => {
+    socket.leave(`conversation_${conversationId}`);
+    socket.leave(`conversation:${conversationId}`);
+    const room = conversationRooms.get(conversationId);
+    if (room) {
+      room.delete(socket.id);
+    }
+  });
   // Visitor is typing
   socket.on("user_typing", ({ conversationId }) => {
     socket.to(`conversation:${conversationId}`).emit("user_typing", {
@@ -510,7 +510,7 @@ app.get("/api/agents/online", (req, res) => {
 
 initializeUploadsDirectory();
 
-// console.log("ENV::", process.env.NODE_ENV ,process.env.FORCE_HTTPS);
+
 // Set up session management
 const PostgresSessionStore = connectPgSimple(session);
 app.use(
@@ -597,7 +597,7 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
-  
+
 
   const listenOptions: any = {
     port,
@@ -659,7 +659,7 @@ app.use((req, res, next) => {
               diployLogger.warn(`[Startup] Recovering stuck campaign: ${c.id} (${c.name})`);
               void startCampaignExecution(c.id).catch((err) => {
                 diployLogger.error(`[Startup] Failed to recover campaign ${c.id}: ${err}`);
-                storage.updateCampaign(c.id, { status: "failed" }).catch(() => {});
+                storage.updateCampaign(c.id, { status: "failed" }).catch(() => { });
               });
             } catch (err) {
               diployLogger.error(`[Startup] Error recovering campaign ${c.id}: ${err}`);

@@ -123,15 +123,19 @@ export const getSMTPConfig = async () => {
       const envHost = process.env.SMTP_HOST;
       if (envHost) {
         console.log('ℹ️ Using SMTP configuration from environment variables');
+        const port = process.env.SMTP_PORT || '587';
+        const isSecure = process.env.SMTP_SECURE === 'true' || port === '465';
+        
         return {
           id: 'env-fallback',
           host: envHost,
-          port: process.env.SMTP_PORT || '587',
-          secure: process.env.SMTP_SECURE === 'true' || process.env.SMTP_PORT === '465',
+          port: port,
+          secure: isSecure,
           user: process.env.SMTP_USER || '',
           password: process.env.SMTP_PASS || '',
           fromName: process.env.SMTP_FROM_NAME || 'Your Company',
           fromEmail: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || '',
+          logo: process.env.SMTP_LOGO || null,
           createdAt: new Date(),
           updatedAt: new Date(),
         };
